@@ -362,11 +362,12 @@ def rag_upload():
                         print(f"Failed to extract text from {file.filename}")
                 except Exception as eval_e:
                     print(f"Processing error: {eval_e}")
+                    return jsonify({"error": f"Upload received, but processing failed: {str(eval_e)}. The file might be too complex for the current session."}), 500
 
                 return jsonify({"message": f"Upload complete! File securely saved and vectorized for RAG chat."})
             except Exception as e:
                 traceback.print_exc()
-                return jsonify({"error": f"Internal processing error: {str(e)}"}), 500
+                return jsonify({"error": f"File storage failed: {str(e)}"}), 500
                     
         return jsonify({"error": "Only PDF files are supported"}), 400
     except Exception as global_e:

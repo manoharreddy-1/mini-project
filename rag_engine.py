@@ -118,8 +118,8 @@ def extract_and_chunk_pdf(file_bytes, subject_name, unit_number):
     documents = []
     
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=3000,
-        chunk_overlap=600,
+        chunk_size=4000,
+        chunk_overlap=500,
         length_function=len
     )
     
@@ -176,11 +176,17 @@ def build_vector_store(documents):
                 index_name="default",
             )
             
-            for i in range(0, total_chunks, batch_size):
-                batch_texts = texts[i:i+batch_size]
-                batch_metas = metadatas[i:i+batch_size]
+            # Parallel ingestion using ThreadPoolExecutor for speed
+            from concurrent.futures import ThreadPoolExecutor
+            def add_batch(start_idx):
+                end_idx = min(start_idx + batch_size, total_chunks)
+                batch_texts = texts[start_idx:end_idx]
+                batch_metas = metadatas[start_idx:end_idx]
                 vector_store.add_texts(texts=batch_texts, metadatas=batch_metas)
-                print(f"Ingested batch {i//batch_size + 1}/{ (total_chunks - 1)//batch_size + 1 }")
+                print(f"Ingested batch starting at {start_idx}/{total_chunks}")
+
+            with ThreadPoolExecutor(max_workers=4) as executor:
+                executor.map(add_batch, range(0, total_chunks, batch_size))
                 
             print(f"Successfully vectorized and stored {total_chunks} chunks into MongoDB Atlas.")
             return
@@ -266,18 +272,19 @@ def generate_rag_answer(query, retrieved_chunks):
                 raise Exception("Model not initialized")
             prompt_text = f"""You are a Semester Tutor. Use the provided context to answer the student's question.
 
+# Answer the student's question derived from the notes provided.
+
 Formatting Rules (STRICTLY FOLLOW):
-- Use **Bold Headings** for each section (e.g., **Definition**, **Explanation**, **Example**, **From Your Notes**)
-- Use bullet points (- ) for all key information and concepts
-- **Bold** any critical terms or important keywords inline
-- If citing from notes, use: **[Unit X]** before the point
-- End with a **Key Takeaways** section with 2-4 bullet points
-- Never write in plain paragraph blocks — always use headings + bullets
+- Use **Bold Headings** for each section (e.g., **Definition**, **Explanation**, **Exam Tips**, **From Your Syllabus**)
+- Use bullet points (- ) exclusively for all information. NO plain text paragraphs.
+- **Bold** any critical terms or important keywords inline.
+- If citing from notes, use: **[Unit X]** or **(Page Y)** before the point.
+- End with a **Key Takeaways** section with 2-4 bullet points.
 
 Constraints:
-1. If the context contains the answer, use it and cite [Unit Number].
-2. If context is missing info, say "**Not found in your notes**" and explain generally.
-3. Highlight where the standard LLM might differ from your notes.
+1. If the context contains the answer, use it and cite the [Unit Number].
+2. If context is missing the specific detail, say "**Not found in your syllabus notes**" and provide a general academic explanation.
+3. Your answer MUST be more detailed than a standard AI; use specific names and examples if they exist in the notes.
 
 Context:
 {context_text}
@@ -306,12 +313,17 @@ def calculate_faithfulness(rag_answer, context_chunks, query):
         try:
             if gemini_model is None:
                 return 0.5
-            eval_prompt = f"""You are evaluating a RAG AI response for General Accuracy and Context Grounding.
-Given the Context and the Answer, score how objectively accurate and helpful the Answer is.
-* If the Answer is both factually accurate and strongly supported by the Context, score 0.9 to 1.0.
-* If the Answer is factually accurate but relies mostly on general knowledge because Context is missing/poor, score 0.8 to 0.9.
-* If the Answer represents hallucinated or contradicted information, score 0.0 to 0.5.
-Analyze carefully, but ONLY RETURN ONE NUMBER LIKE 0.9 - NO OTHER TEXT.
+            eval_prompt = f"""You are evaluating a RAG (Retrieval-Augmented Generation) AI response for GROUNDING and FAITHFULNESS.
+Given the Context and the Answer, score how strictly the Answer relies on the Context.
+
+Scoring Rubric (STRICT):
+* Score 0.95 - 1.0: Answer is 100% grounded in Context and explicitly cites Units/Syllabus. 
+* Score 0.70 - 0.90: Answer is factually accurate but ignores provided context or relies on general knowledge (i.e. starts with "Not found in notes").
+* Score 0.40 - 0.60: Answer matches the question but is vague or barely addresses the specific context provided.
+* Score 0.0 - 0.30: Answer is factually incorrect, hallucinated, or contradicted by the context.
+
+Analyze with high rigor. Do NOT give 1.0 for general knowledge answers.
+ONLY RETURN ONE NUMBER LIKE 0.85 - NO OTHER TEXT.
 
 Context: {context_text}
 Question: {query}
@@ -335,10 +347,17 @@ def calculate_general_accuracy(answer, query):
         try:
             if gemini_model is None:
                 return 0.5
-            eval_prompt = f"""You are evaluating an AI response for general factual Accuracy.
-Score how objectively correct and comprehensive the Answer is for the Question based on general computer science and academic knowledge.
-Score: 1.0 = Fully correct, 0.5 = Partially correct/incomplete, 0.0 = Factually incorrect or completely irrelevant.
-Analyze carefully, but ONLY RETURN ONE NUMBER LIKE 0.8 - NO OTHER TEXT.
+            eval_prompt = f"""You are evaluating an AI response for General Factual Accuracy and Completeness.
+Score how objectively correct and academically comprehensive the Answer is for the Question.
+
+Scoring Rubric (STRICT):
+* 0.9 - 1.0: Thru, perfectly accurate, and highly comprehensive academic answer.
+* 0.7 - 0.8: Factually correct but "generic" or superficial (typical of a generic AI without syllabus context).
+* 0.5 - 0.6: Partially correct but missing major components or slightly vague.
+* 0.0 - 0.4: Factually incorrect, irrelevant, or misleading.
+
+Analyze with high rigor. Only give 1.0 for truly exceptional, deep answers.
+ONLY RETURN ONE NUMBER LIKE 0.75 - NO OTHER TEXT.
 
 Question: {query}
 Answer: {answer}

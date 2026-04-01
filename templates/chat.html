@@ -539,7 +539,13 @@
                 console.error("SendMessage Error:", e);
                 const loadBubble = document.getElementById(loadingId);
                 if (loadBubble) {
-                    loadBubble.innerHTML = `<div class="message-content"><div class="avatar ai-av">AI</div><div style="color:#ef4444;">Error generating response. Make sure the backend LLM is running correctly.</div></div>`;
+                    let errMsg = "Error generating response. Please try again.";
+                    if (e.message.includes("Upload failed")) {
+                        errMsg = "Syllabus Indexing Error: The file might be too large or the server timed out. Check your connection.";
+                    } else if (e.message.includes("429") || e.message.includes("quota")) {
+                        errMsg = "AI Quota Exceeded. Please try again in 1 minute.";
+                    }
+                    loadBubble.innerHTML = `<div class="message-content"><div class="avatar ai-av">AI</div><div style="color:#ef4444;">${errMsg}</div></div>`;
                 }
             } finally {
                 btn.disabled = false;

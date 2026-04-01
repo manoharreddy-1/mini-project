@@ -16,11 +16,7 @@ load_dotenv()
 # makes a blocking network call that hangs Flask startup.
 # Call _ensure_init() inside any function that needs these.
 
-keys_str = os.getenv("GEMINI_API_KEYS", "")
-if keys_str:
-    API_KEYS = [k.strip() for k in keys_str.split(",") if k.strip()]
-else:
-    API_KEYS = [os.getenv("GEMINI_API_KEY")] if os.getenv("GEMINI_API_KEY") else []
+API_KEYS = []
 
 # Fallback model chain tried in order when the current model is overloaded (503)
 FALLBACK_MODELS = [
@@ -33,9 +29,17 @@ current_key_idx = 0
 current_model_idx = 0
 
 def get_current_api_key():
+    global API_KEYS
+    if not API_KEYS:
+        keys_str = os.getenv("GEMINI_API_KEYS", "")
+        if keys_str:
+            API_KEYS = [k.strip() for k in keys_str.split(",") if k.strip()]
+        else:
+            API_KEYS = [os.getenv("GEMINI_API_KEY")] if os.getenv("GEMINI_API_KEY") else []
+            
     if not API_KEYS:
         return None
-    return API_KEYS[current_key_idx]
+    return API_KEYS[current_key_idx % len(API_KEYS)]
 
 def get_current_model():
     return FALLBACK_MODELS[current_model_idx % len(FALLBACK_MODELS)]

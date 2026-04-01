@@ -354,22 +354,18 @@ def rag_upload():
                 fs = gridfs.GridFS(db)
                 file_id = fs.put(file_bytes, filename=file.filename, subject_name=subject_name, unit_number=unit_number)
                 
-                import threading
-                def bg_process(f_bytes, s_name, u_num, f_name):
-                    try:
-                        chunks = extract_and_chunk_pdf(f_bytes, s_name, u_num)
-                        if chunks:
-                            build_vector_store(chunks)
-                        else:
-                            print(f"Failed to extract text from {f_name}. The file might be corrupted.")
-                    except Exception as bg_e:
-                        print(f"Background processing error: {bg_e}")
+                # For Vercel Serverless, background threads are instantly killed.
+                # Must synchronously process the PDF before returning.
+                try:
+                    chunks = extract_and_chunk_pdf(file_bytes, subject_name, unit_number)
+                    if chunks:
+                        build_vector_store(chunks)
+                    else:
+                        print(f"Failed to extract text from {file.filename}")
+                except Exception as eval_e:
+                    print(f"Processing error: {eval_e}")
 
-                t = threading.Thread(target=bg_process, args=(file_bytes, subject_name, unit_number, file.filename))
-                t.daemon = True
-                t.start()
-
-                return jsonify({"message": f"Upload complete! File saved to Database. AI is now processing and reading {file.filename} in the background."})
+                return jsonify({"message": f"Upload complete! File securely saved and vectorized for RAG chat."})
             except Exception as e:
                 traceback.print_exc()
                 return jsonify({"error": f"Internal processing error: {str(e)}"}), 500

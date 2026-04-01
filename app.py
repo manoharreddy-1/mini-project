@@ -30,9 +30,7 @@ app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100 MB max upload
 def request_entity_too_large(error):
     return jsonify({"error": "File too large. Maximum size is 100 MB."}), 413
 
-# Ensure upload directory exists (kept for legacy reasons if needed)
-UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'uploads')
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
 
 # Initialize Database on startup
 init_db()

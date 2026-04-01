@@ -300,7 +300,7 @@ def chat_message():
             break # Success, we got a response!
         except Exception as e:
             error_msg = str(e).lower()
-            if "429" in error_msg or "503" in error_msg or "504" in error_msg or "quota" in error_msg or "resourceexhausted" in error_msg or "deadline" in error_msg:
+            if "404" in error_msg or "429" in error_msg or "503" in error_msg or "504" in error_msg or "quota" in error_msg or "resourceexhausted" in error_msg or "deadline" in error_msg:
                 print(f"[chat_message] API Quota/Overload on attempt {attempts+1}. Rotating key/model...")
                 rag_engine.rotate_api_key()
                 attempts += 1

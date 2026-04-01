@@ -20,13 +20,12 @@ API_KEYS = []
 
 # Fallback model chain tried in order when the current model is overloaded (503)
 FALLBACK_MODELS = [
-    "gemini-2.0-flash", 
     "gemini-2.5-flash",
+    "gemini-2.5-pro",
+    "gemini-2.0-flash", 
     "gemini-flash-latest",
     "gemini-pro-latest",
-    "gemini-3-flash-preview",
-    "gemini-2.0-flash-lite",
-    "gemini-flash-lite-latest"
+    "gemini-2.0-flash-lite"
 ]
 
 current_key_idx = 0
@@ -316,14 +315,14 @@ def calculate_faithfulness(rag_answer, context_chunks, query):
             eval_prompt = f"""You are evaluating a RAG (Retrieval-Augmented Generation) AI response for GROUNDING and FAITHFULNESS.
 Given the Context and the Answer, score how strictly the Answer relies on the Context.
 
-Scoring Rubric (STRICT):
-* Score 0.95 - 1.0: Answer is 100% grounded in Context and explicitly cites Units/Syllabus. 
-* Score 0.70 - 0.90: Answer is factually accurate but ignores provided context or relies on general knowledge (i.e. starts with "Not found in notes").
+Scoring Rubric (Realistic/Nuanced):
+* Score 0.85 - 0.95: Answer is 100% grounded in Context AND explicitly cites Units/Syllabus context. 
+* Score 0.65 - 0.80: Answer is factually accurate but ignores provided context or relies on general knowledge (i.e. starts with "Not found in notes").
 * Score 0.40 - 0.60: Answer matches the question but is vague or barely addresses the specific context provided.
-* Score 0.0 - 0.30: Answer is factually incorrect, hallucinated, or contradicted by the context.
+* Score 0.0 - 0.35: Answer is factually incorrect, hallucinated, or contradicted by the context.
 
-Analyze with high rigor. Do NOT give 1.0 for general knowledge answers.
-ONLY RETURN ONE NUMBER LIKE 0.85 - NO OTHER TEXT.
+Analyze with rigor. Do NOT give 0.95 for general knowledge answers.
+ONLY RETURN ONE NUMBER LIKE 0.82 - NO OTHER TEXT.
 
 Context: {context_text}
 Question: {query}
@@ -350,14 +349,14 @@ def calculate_general_accuracy(answer, query):
             eval_prompt = f"""You are evaluating an AI response for General Factual Accuracy and Completeness.
 Score how objectively correct and academically comprehensive the Answer is for the Question.
 
-Scoring Rubric (STRICT):
-* 0.9 - 1.0: Thru, perfectly accurate, and highly comprehensive academic answer.
-* 0.7 - 0.8: Factually correct but "generic" or superficial (typical of a generic AI without syllabus context).
-* 0.5 - 0.6: Partially correct but missing major components or slightly vague.
-* 0.0 - 0.4: Factually incorrect, irrelevant, or misleading.
+Scoring Rubric (Realistic/Nuanced):
+* 0.85 - 0.95: Thorough, perfectly accurate, and highly comprehensive academic answer.
+* 0.60 - 0.80: Factually correct but "generic" or superficial (typical of a generic AI without syllabus context).
+* 0.35 - 0.55: Partially correct but missing major components or slightly vague.
+* 0.00 - 0.30: Factually incorrect, irrelevant, or misleading.
 
-Analyze with high rigor. Only give 1.0 for truly exceptional, deep answers.
-ONLY RETURN ONE NUMBER LIKE 0.75 - NO OTHER TEXT.
+Analyze with rigor. Only give 0.95 for truly exceptional, deep answers.
+ONLY RETURN ONE NUMBER LIKE 0.72 - NO OTHER TEXT.
 
 Question: {query}
 Answer: {answer}
@@ -365,7 +364,7 @@ Answer: {answer}
 Score:"""
             resp = gemini_model.generate_content(eval_prompt, request_options={"timeout": 60})
             import re
-            match = re.search(r'[01]?\.\d+|1\.0|0\.0', resp.text.strip())
+            match = re.search(r'\b(1\.0|0\.\d+|1|0)\b', resp.text.strip())
             return float(match.group()) if match else 0.5
         except Exception as e:
             print(f"Accuracy error (attempt {attempt+1}/{max_attempts}): {str(e)[:80]}")

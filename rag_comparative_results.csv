@@ -1,0 +1,5 @@
+Model Configuration,Type,Base Model,Average Accuracy (%)
+Standard LLM Baseline,Standard LLM,gemini-2.5-flash,20.00%
+RAG Model 1 (Retriever + gemini-2.5-flash),RAG Pipeline,gemini-2.5-flash,0.00%
+RAG Model 2 (Retriever + gemini-2.0-flash),RAG Pipeline,gemini-2.0-flash,0.00%
+RAG Model 3 (Retriever + gemini-2.5-pro),RAG Pipeline,gemini-2.5-pro,0.00%

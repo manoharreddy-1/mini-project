@@ -65,14 +65,13 @@ def _ensure_init():
         return
 
     try:
-        from langchain_google_genai import ChatGoogleGenerativeAI
-        from langchain_community.embeddings import HuggingFaceEmbeddings
+        from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
         import google.generativeai as genai
 
         model_name = get_current_model()
         genai.configure(api_key=key)
         gemini_model  = genai.GenerativeModel(model_name)
-        _embeddings   = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+        _embeddings   = GoogleGenerativeAIEmbeddings(model="models/embedding-001", google_api_key=key)
         _llm          = ChatGoogleGenerativeAI(
                             model=model_name,
                             google_api_key=key,

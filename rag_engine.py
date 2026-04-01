@@ -20,10 +20,13 @@ API_KEYS = []
 
 # Fallback model chain tried in order when the current model is overloaded (503)
 FALLBACK_MODELS = [
-    "gemini-1.5-flash",
-    "gemini-pro",
-    "gemini-1.5-pro",
-    "gemini-1.5-flash-latest"
+    "gemini-2.0-flash", 
+    "gemini-2.5-flash",
+    "gemini-flash-latest",
+    "gemini-pro-latest",
+    "gemini-3-flash-preview",
+    "gemini-2.0-flash-lite",
+    "gemini-flash-lite-latest"
 ]
 
 current_key_idx = 0

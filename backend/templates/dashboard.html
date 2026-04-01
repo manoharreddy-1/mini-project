@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - ScholarRAG</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='chatgpt.css') }}">
+    <style>
+        body {
+            overflow-y: auto;
+        }
+
+        .split-pane {
+            display: flex;
+            gap: 2rem;
+            width: 100%;
+            height: calc(100vh - 150px);
+            transition: all 0.5s ease;
+        }
+
+        .upload-panel, .chat-panel {
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 16px;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+            transition: all 0.5s ease;
+        }
+
+        .upload-panel { 
+            flex: 1; 
+            max-width: 350px;
+        }
+        
+        .chat-panel { flex: 2; }
+        
+        .comparative-view {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+            flex: 1;
+        }
+        
+        .llm-box {
+            flex: 1;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 1.5rem;
+            border-radius: 12px;
+            overflow-y: auto;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: transform 0.3s;
+        }
+
+        .llm-box:hover {
+            transform: translateY(-5px);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+        
+        .score-box {
+            background: linear-gradient(135deg, var(--primary), #0284c7);
+            color: white;
+            padding: 0.6rem 1.2rem;
+            border-radius: 50px;
+            display: inline-block;
+            font-weight: bold;
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+        }
+
+        .input-group { margin-bottom: 1.5rem; }
+        .input-group label { display: block; margin-bottom: 0.5rem; font-weight: 500; color: #f8fafc;}
+        .input-group input, .input-group select {
+            width: 100%;
+            padding: 0.8rem;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(0, 0, 0, 0.3);
+            color: white;
+        }
+
+        .tabs { 
+            margin-bottom: 2rem; 
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1); 
+            display: flex;
+            gap: 1rem;
+        }
+
+        .tabs button { 
+            background: transparent; 
+            border: none;
+            border-bottom: 2px solid transparent;
+            color: var(--text-muted);
+            padding: 0.8rem 1.5rem;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .tabs button.active { 
+            color: var(--primary);
+            border-bottom: 2px solid var(--primary);
+        }
+
+        #upload-btn, #ask-btn {
+            background: linear-gradient(135deg, var(--primary), #0284c7);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 0.8rem 1.5rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        #upload-btn:hover, #ask-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+        }
+
+        header {
+            padding: 1.5rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(15, 23, 42, 0.4);
+            backdrop-filter: blur(10px);
+            margin-bottom: 2rem;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #10b981, #3b82f6);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+    </style>
+</head>
+<body class="dark-mode">
+    <header>
+        <div class="logo">ScholarRAG</div>
+        <nav>
+            <a href="home.html" style="color:var(--text-muted); text-decoration:none; font-weight:600; margin-right:1.5rem;">Home</a>
+            <!-- <a href="quiz.html" style="color:var(--primary); text-decoration:none; font-weight:600; margin-right:1.5rem;">Take a Quiz</a> -->
+            <button id="theme-toggle" style="background:transparent; border:none; cursor:pointer; font-size:1.2rem; filter: grayscale(1);">🌙</button>
+        </nav>
+    </header>
+
+    <main style="align-items: flex-start;">
+        <div class="split-pane">
+            <!-- Left Panel: Context Manager & Uploads -->
+            <div class="upload-panel">
+                <h3>📚 Knowledge Base</h3>
+                <form id="upload-form">
+                    <div class="input-group">
+                        <label>Upload Semester Notes (PDF)</label>
+                        <input type="file" id="pdf-file" accept=".pdf" required />
+                    </div>
+                    <div class="input-group">
+                        <label>Subject Name</label>
+                        <input type="text" id="subject" placeholder="e.g. Data Structures" required />
+                    </div>
+                    <div class="input-group">
+                        <label>Unit Number</label>
+                        <input type="number" id="unit" placeholder="e.g. 1" required />
+                    </div>
+                    <button type="submit" id="upload-btn">Ingest into ChromaDB</button>
+                </form>
+                <div id="upload-status" style="margin-top: 1rem; color: #22c55e; font-size: 0.9rem;"></div>
+            </div>
+
+            <!-- Right Panel: Comparative RAG Chat -->
+            <div class="chat-panel">
+                <div class="tabs">
+                    <button class="active" id="tab-rag">📚 RAG Tutor</button>
+                    <button id="tab-scholar">🎓 Scholarship Extractor</button>
+                </div>
+                
+                <form id="chat-form" style="display:flex; gap: 1rem;">
+                    <input type="text" id="query" placeholder="Ask a question from the notes..." style="margin:0;" required/>
+                    <button type="submit" style="width:120px;" id="ask-btn">Ask</button>
+                </form>
+
+                <div id="results-area" style="display:none; margin-top:2rem; flex:1; display:flex; flex-direction:column;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <h3>Comparative Results</h3>
+                        <div class="score-box" id="faith-score">RAGAS Faithfulness: 0.0</div>
+                    </div>
+                    <div class="comparative-view">
+                        <div class="llm-box">
+                            <h4 style="margin-top:0; color:#ef4444;">Standard LLM (Hallucination Prone)</h4>
+                            <div id="plain-ans">Waiting...</div>
+                        </div>
+                        <div class="llm-box">
+                            <h4 style="margin-top:0; color:#10b981;">RAG Grounded Answer</h4>
+                            <div id="rag-ans">Waiting...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const themeToggle = document.getElementById('theme-toggle');
+        themeToggle.addEventListener('click', () => {
+            document.body.classList.toggle('dark-mode');
+            document.body.classList.toggle('light-mode');
+        });
+
+        // Backend URL config
+        const API_BASE = "http://127.0.0.1:5000";
+
+        // Upload Logic
+        const uploadForm = document.getElementById('upload-form');
+        uploadForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('upload-btn');
+            const statusBox = document.getElementById('upload-status');
+            
+            btn.innerText = "Processing & Ingesting...";
+            btn.disabled = true;
+
+            const file = document.getElementById('pdf-file').files[0];
+            const subject = document.getElementById('subject').value;
+            const unit = document.getElementById('unit').value;
+
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('subject_name', subject);
+            formData.append('unit_number', unit);
+
+            try {
+                const res = await fetch(`${API_BASE}/rag/upload`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+                statusBox.innerText = data.message || data.error;
+            } catch (err) {
+                statusBox.innerText = "Error: " + err;
+            } finally {
+                btn.innerText = "Ingest into ChromaDB";
+                btn.disabled = false;
+            }
+        });
+
+        // Chat Logic
+        const chatForm = document.getElementById('chat-form');
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('ask-btn');
+            const query = document.getElementById('query').value;
+            const isScholar = document.getElementById('tab-scholar').classList.contains('active');
+            
+            btn.innerText = "Thinking...";
+            btn.disabled = true;
+            document.getElementById('results-area').style.display = 'flex';
+            document.getElementById('plain-ans').innerHTML = "<i>Generating...</i>";
+            document.getElementById('rag-ans').innerHTML = "<i>Retrieving and generating...</i>";
+            document.getElementById('faith-score').innerText = "RAGAS Faithfulness: Calculating...";
+
+            try {
+                if(isScholar) {
+                    const res = await fetch(`${API_BASE}/rag/scholar`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({query})
+                    });
+                    const data = await res.json();
+                    document.getElementById('plain-ans').innerHTML = "<i>N/A in Scholar match</i>";
+                    document.getElementById('rag-ans').innerHTML = data.extracted_info.replace(/\\n/g, '<br>');
+                    document.getElementById('faith-score').innerText = `Scanned ${data.chunks_scanned} chunks`;
+                } else {
+                    const res = await fetch(`${API_BASE}/rag/comparative_chat`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({query})
+                    });
+                    const data = await res.json();
+                    document.getElementById('plain-ans').innerHTML = data.plain_llm_answer.replace(/\\n/g, '<br>');
+                    document.getElementById('rag-ans').innerHTML = data.rag_grounded_answer.replace(/\\n/g, '<br>');
+                    document.getElementById('faith-score').innerText = `RAGAS Faithfulness: ${(data.faithfulness_score * 100).toFixed(0)}%`;
+                }
+            } catch (err) {
+                document.getElementById('plain-ans').innerHTML = "Error: " + err;
+            } finally {
+                btn.innerText = "Ask";
+                btn.disabled = false;
+            }
+        });
+
+        // Tabs
+        document.getElementById('tab-rag').addEventListener('click', (e) => {
+            document.getElementById('tab-rag').classList.add('active');
+            document.getElementById('tab-scholar').classList.remove('active');
+            document.querySelector('.upload-panel').style.display = 'flex';
+        });
+        document.getElementById('tab-scholar').addEventListener('click', (e) => {
+            document.getElementById('tab-scholar').classList.add('active');
+            document.getElementById('tab-rag').classList.remove('active');
+            document.querySelector('.upload-panel').style.display = 'none';
+        });
+    </script>
+</body>
+</html>

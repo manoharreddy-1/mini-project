@@ -1,0 +1,12 @@
+AI Engines initialized. Key #1, Model: gemini-2.5-flash
+Ingestion error (attempt 1/4): InvalidArgumentError: Collection expecting embedding with dimension of 3072, got 384
+[Rotated] Switched to Key #2 / Model: gemini-2.0-flash
+AI Engines initialized. Key #2, Model: gemini-2.0-flash
+Ingestion error (attempt 2/4): InvalidArgumentError: Collection expecting embedding with dimension of 3072, got 384
+[Rotated] Switched to Key #3 / Model: gemini-flash-latest
+AI Engines initialized. Key #3, Model: gemini-flash-latest
+Ingestion error (attempt 3/4): InvalidArgumentError: Collection expecting embedding with dimension of 3072, got 384
+[Rotated] Switched to Key #4 / Model: gemini-2.5-flash
+AI Engines initialized. Key #4, Model: gemini-2.5-flash
+Ingestion error (attempt 4/4): InvalidArgumentError: Collection expecting embedding with dimension of 3072, got 384
+[Rotated] Switched to Key #1 / Model: gemini-2.0-flash

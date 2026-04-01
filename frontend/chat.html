@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ScholarRAG</title>
+    <link rel="stylesheet" href="chatgpt.css">
+</head>
+<body>
+
+    <!-- Sidebar History -->
+    <div class="sidebar">
+        <button class="new-chat-btn" onclick="createNewSession()">
+            <span style="font-size:1.2rem;">+</span> New Chat
+        </button>
+        <div class="history-list" id="history-list">
+            <!-- Sessions will be injected here -->
+        </div>
+        <div style="padding: 1rem; border-top: 1px solid var(--border-color); font-size: 0.875rem;">
+            <span id="user-email">user@example.com</span>
+            <span style="float:right; cursor:pointer; color:var(--text-muted);" onclick="logout()">Log out</span>
+        </div>
+    </div>
+
+    <!-- Main Chat Area -->
+    <div class="main-chat">
+        
+        <div class="chat-thread" id="chat-thread">
+            <!-- Messages inject here -->
+            <div class="message ai">
+                <div class="message-content">
+                    <div class="avatar ai-av">AI</div>
+                    <div>Hello! I'm your ScholarRAG tutor. What do you want to learn today from the course notes?</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Input Bar -->
+        <div class="input-area">
+            <div class="input-container">
+                <textarea id="prompt-input" class="chat-input" placeholder="Send a message..." rows="1" oninput="this.style.height = '';this.style.height = this.scrollHeight + 'px'"></textarea>
+                <button class="send-btn" id="send-btn" onclick="sendMessage()">➤</button>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- JS Logic -->
+    <script>
+        const API_BASE = "http://127.0.0.1:5000";
+        const userId = localStorage.getItem('rag_user_id');
+        let currentSessionId = null;
+
+        if (!userId) {
+            window.location.href = "index.html";
+        }
+        document.getElementById('user-email').innerText = localStorage.getItem('rag_email') || "User";
+
+        function logout() {
+            localStorage.clear();
+            window.location.href = "index.html";
+        }
+
+        // 1. Initial Load: Fetch Sessions
+        async function loadSessions() {
+            try {
+                const res = await fetch(`${API_BASE}/chat/sessions/${userId}`);
+                const sessions = await res.json();
+                
+                const list = document.getElementById('history-list');
+                list.innerHTML = "";
+                
+                sessions.forEach(s => {
+                    const el = document.createElement('div');
+                    el.className = 'history-item';
+                    el.innerText = s.title;
+                    el.onclick = () => loadHistory(s.id);
+                    list.appendChild(el);
+                });
+
+                if(sessions.length > 0) {
+                    loadHistory(sessions[0].id);
+                } else {
+                    createNewSession();
+                }
+            } catch(e) {
+                console.error("Failed to load sessions", e);
+            }
+        }
+
+        // 2. Create New Session
+        async function createNewSession() {
+            try {
+                const res = await fetch(`${API_BASE}/chat/session/new`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({user_id: userId})
+                });
+                const data = await res.json();
+                currentSessionId = data.session_id;
+                
+                document.getElementById('chat-thread').innerHTML = `
+                    <div class="message ai">
+                        <div class="message-content">
+                            <div class="avatar ai-av">AI</div>
+                            <div>New chat started! Ask me anything about your inserted notes.</div>
+                        </div>
+                    </div>`;
+                
+                // Refresh list visually without reloading the whole API (Optimization)
+                loadSessions(); 
+            } catch (e) {
+                console.error("Failed creating session", e);
+            }
+        }
+
+        // 3. Load Existing History
+        async function loadHistory(sessionId) {
+            currentSessionId = sessionId;
+            try {
+                const res = await fetch(`${API_BASE}/chat/history/${sessionId}`);
+                const history = await res.json();
+                
+                const thread = document.getElementById('chat-thread');
+                thread.innerHTML = "";
+                
+                if (history.length === 0) {
+                    thread.innerHTML = `
+                    <div class="message ai">
+                        <div class="message-content">
+                            <div class="avatar ai-av">AI</div>
+                            <div>Hello! Ask me anything about the local data folder notes.</div>
+                        </div>
+                    </div>`;
+                }
+
+                history.forEach(msg => {
+                    appendMessage(msg.role, msg.content, msg.id);
+                });
+                scrollToBottom();
+
+                // Highlight active session visually
+                document.querySelectorAll('.history-item').forEach(el => el.classList.remove('active'));
+                // Note: accurate highlighting requires tracking DOM nodes or IDs. 
+                // Simplification for MVP.
+            } catch (e) {
+                console.error("Failed loading history", e);
+            }
+        }
+
+        // 4. Send Message
+        async function sendMessage() {
+            const input = document.getElementById('prompt-input');
+            const query = input.value.trim();
+            if(!query || !currentSessionId) return;
+
+            const btn = document.getElementById('send-btn');
+            input.value = "";
+            input.style.height = "auto";
+            btn.disabled = true;
+
+            // Optimistic UI Append
+            appendMessage('user', query);
+            scrollToBottom();
+
+            // Wait Bubbles for AI
+            const loadingId = "msg-" + Date.now();
+            appendMessage('ai', "<span style='color:var(--text-muted);'>Thinking via RAG...</span>", loadingId);
+            scrollToBottom();
+
+            try {
+                const res = await fetch(`${API_BASE}/chat/message`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({session_id: currentSessionId, user_id: userId, query})
+                });
+                const data = await res.json();
+                
+                // Replace loading bubble
+                const loadBubble = document.getElementById(loadingId);
+                if (loadBubble) {
+                    loadBubble.innerHTML = `<div class="message-content">
+                            <div class="avatar ai-av">AI</div>
+                            <div style="flex:1;">
+                                <div style="margin-bottom:0.5rem;">${formatText(data.content)}</div>
+                                <div style="font-size:0.75rem; color:var(--primary);">* Context blocks used: ${data.context_sources}</div>
+                            </div>
+                        </div>`;
+                }
+                scrollToBottom();
+                
+                // Refresh sidebar if it was the first message (title changes)
+                // We should technically only do this if history length was 0, but for MVP:
+                setTimeout(() => loadSessions(), 500); 
+
+            } catch(e) {
+                const loadBubble = document.getElementById(loadingId);
+                if (loadBubble) {
+                    loadBubble.innerHTML = `<div class="message-content"><div class="avatar ai-av">AI</div><div style="color:#ef4444;">Error generating response.</div></div>`;
+                }
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        function appendMessage(role, text, id_override) {
+            const thread = document.getElementById('chat-thread');
+            const el = document.createElement('div');
+            el.className = `message ${role}`;
+            if(id_override) el.id = id_override;
+            
+            const avatar = role === 'user' ? `<div class="avatar user-av">U</div>` : `<div class="avatar ai-av">AI</div>`;
+            const formatted = formatText(text);
+
+            el.innerHTML = `
+                <div class="message-content">
+                    ${avatar}
+                    <div style="flex:1; overflow-x: auto;">${formatted}</div>
+                </div>
+            `;
+            
+            thread.appendChild(el);
+        }
+
+        function scrollToBottom() {
+            const thread = document.getElementById('chat-thread');
+            thread.scrollTop = thread.scrollHeight;
+        }
+
+        // Basic Markdown helper
+        function formatText(text) {
+            if(!text.includes) return text;
+            let val = text.replace(/\\n/g, '<br>');
+            val = val.replace(/\\*\\*(.*?)\\*\\*/g, '<strong>$1</strong>'); // Bold
+            return val;
+        }
+
+        // Handle Enter key (Shift+Enter for newline)
+        document.getElementById('prompt-input').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        // Init
+        loadSessions();
+    </script>
+</body>
+</html>

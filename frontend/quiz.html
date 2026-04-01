@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quiz Generator - RAG Tutor</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .quiz-container {
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            padding: 2rem;
+            width: 100%;
+            max-width: 600px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+        }
+        .input-group { margin-bottom: 1rem; }
+        .input-group label { display: block; margin-bottom: 0.5rem; font-weight: 500;}
+        select, input {
+            width: 100%; padding: 0.75rem; border-radius: 8px; border: 1px solid var(--glass-border);
+            background: rgba(255,255,255,0.05); color: inherit; font-size: 1rem;
+        }
+        body.light-mode select { background: rgba(0,0,0,0.05); }
+
+        #quiz-area { display: none; margin-top: 2rem; }
+        .question-card { margin-bottom: 1.5rem; padding: 1rem; border: 1px solid var(--glass-border); border-radius: 8px;}
+        .options-group { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 1rem; }
+        .option-lbl { 
+            background: rgba(255,255,255,0.1); padding: 0.75rem; border-radius: 8px; cursor: pointer;
+            transition: background 0.2s;
+        }
+        .option-lbl:hover { background: rgba(255,255,255,0.2); }
+        .option-lbl input { width: auto; margin-right: 0.5rem; margin-bottom:0;}
+        
+        .correct { border: 1px solid #10b981 !important; background: rgba(16, 185, 129, 0.2) !important; }
+        .incorrect { border: 1px solid #ef4444 !important; background: rgba(239, 68, 68, 0.2) !important; }
+        .explanation { margin-top: 1rem; font-size: 0.9rem; color: #94a3b8; display: none; padding-top:1rem; border-top: 1px solid var(--glass-border);}
+    </style>
+</head>
+<body class="dark-mode">
+    <header>
+        <div class="logo">ScholarRAG</div>
+        <nav>
+            <a href="dashboard.html" style="color:var(--primary); text-decoration:none; font-weight:bold; margin-right:1rem;">Back to Chat</a>
+            <button id="theme-toggle">☀️ / 🌙</button>
+            <div class="profile-icon">J</div>
+        </nav>
+    </header>
+
+    <main>
+        <div class="quiz-container">
+            <h2 style="margin-top:0;">Multimodal Quiz Generator</h2>
+            <form id="quiz-form">
+                <div class="input-group">
+                    <label>Quiz Topic (e.g. Operating Systems)</label>
+                    <input type="text" id="q-topic" placeholder="Topic..." required />
+                </div>
+                <div style="display:flex; gap: 1rem;">
+                    <div class="input-group" style="flex:1;">
+                        <label>Difficulty</label>
+                        <select id="q-level">
+                            <option>Easy</option>
+                            <option selected>Medium</option>
+                            <option>Hard</option>
+                        </select>
+                    </div>
+                    <div class="input-group" style="flex:1;">
+                        <label>Quantity</label>
+                        <input type="number" id="q-qty" value="3" min="1" max="10" />
+                    </div>
+                </div>
+                <button type="submit" id="gen-btn">Generate Quiz</button>
+            </form>
+
+            <div id="quiz-area">
+                <h3 id="score-display"></h3>
+                <div id="questions-list"></div>
+                <button id="submit-quiz-btn" style="margin-top: 1rem;">Submit & View Score</button>
+            </div>
+            
+        </div>
+    </main>
+
+    <script>
+        const themeToggle = document.getElementById('theme-toggle');
+        themeToggle.addEventListener('click', () => {
+            document.body.classList.toggle('dark-mode');
+            document.body.classList.toggle('light-mode');
+        });
+
+        const API_BASE = "http://127.0.0.1:5000";
+        let currentQuizData = [];
+
+        document.getElementById('quiz-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('gen-btn');
+            btn.innerText = "Generating Quiz via AI...";
+            btn.disabled = true;
+
+            const topic = document.getElementById('q-topic').value;
+            const level = document.getElementById('q-level').value;
+            const qty = document.getElementById('q-qty').value;
+
+            try {
+                const res = await fetch(`${API_BASE}/quiz/generate`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({topic, level, qty})
+                });
+                const data = await res.json();
+                
+                if(data.questions) {
+                    currentQuizData = data.questions;
+                    renderQuiz(data.questions);
+                    document.getElementById('quiz-area').style.display = 'block';
+                    document.getElementById('quiz-form').style.display = 'none';
+                } else {
+                    alert("Failed to generate: " + JSON.stringify(data));
+                }
+            } catch(e) {
+                alert("Error connecting to server: " + e);
+            } finally {
+                btn.innerText = "Generate Quiz";
+                btn.disabled = false;
+            }
+        });
+
+        function renderQuiz(questions) {
+            const list = document.getElementById('questions-list');
+            list.innerHTML = "";
+            
+            questions.forEach((q, idx) => {
+                let html = `<div class="question-card" id="q-${idx}">
+                    <p style="font-weight:600; font-size:1.1rem; margin-top:0;">${idx+1}. ${q.question}</p>
+                    <div class="options-group">`;
+                
+                q.options.forEach(opt => {
+                    html += `<label class="option-lbl" id="lbl-${idx}-${opt}"><input type="radio" name="q-${idx}" value="${opt}"> ${opt}</label>`;
+                });
+                
+                html += `</div>
+                    <div class="explanation" id="exp-${idx}"><strong>AI Explanation:</strong> ${q.explanation}</div>
+                </div>`;
+                list.innerHTML += html;
+            });
+        }
+
+        document.getElementById('submit-quiz-btn').addEventListener('click', () => {
+            let score = 0;
+            currentQuizData.forEach((q, idx) => {
+                const selected = document.querySelector(`input[name="q-${idx}"]:checked`);
+                const expBox = document.getElementById(`exp-${idx}`);
+                expBox.style.display = 'block';
+
+                if(selected && selected.value === q.correct_answer) {
+                    score++;
+                    document.getElementById(`lbl-${idx}-${selected.value}`).classList.add('correct');
+                } else {
+                    if(selected) {
+                        document.getElementById(`lbl-${idx}-${selected.value}`).classList.add('incorrect');
+                    }
+                    // highlight correct
+                    const correctLbl = document.getElementById(`lbl-${idx}-${q.correct_answer}`);
+                    if(correctLbl) correctLbl.classList.add('correct');
+                }
+            });
+
+            document.getElementById('score-display').innerText = `You Scored ${score} / ${currentQuizData.length}`;
+            document.getElementById('submit-quiz-btn').style.display = 'none';
+        });
+    </script>
+</body>
+</html>

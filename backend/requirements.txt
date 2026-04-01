@@ -1,0 +1,14 @@
+Flask
+flask-cors
+langchain
+langchain-google-genai
+pymongo
+langchain-mongodb
+PyMuPDF
+python-dotenv
+ragas
+datasets
+requests
+beautifulsoup4
+youtube-search-python
+youtube-search-python

@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ScholarRAG - Learn a Topic</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='chatgpt.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        .learn-container {
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 30px;
+            background: var(--glass-bg);
+            border-radius: 12px;
+            border: 1px solid var(--glass-border);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .header h1 {
+            color: var(--text-color);
+            margin-bottom: 0.5rem;
+        }
+
+        .header p {
+            color: var(--text-muted);
+        }
+
+        .input-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: var(--text-color);
+            font-weight: 500;
+        }
+
+        .input-group input[type="text"],
+        .input-group select {
+            width: 100%;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--glass-border);
+            border-radius: 8px;
+            color: var(--text-color);
+            font-size: 1rem;
+            box-sizing: border-box;
+        }
+        
+        .input-group select:focus,
+        .input-group input:focus {
+            outline: none;
+            border-color: #3b82f6;
+        }
+
+        .input-group select option {
+            background-color: var(--bg-color, #1e1e1e);
+            color: #fff;
+        }
+
+        .btn-search {
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            width: 100%;
+            transition: opacity 0.2s;
+            font-size: 1rem;
+        }
+
+        .btn-search:hover {
+            opacity: 0.9;
+        }
+        
+        .btn-search:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .results-section {
+            margin-top: 2rem;
+            padding: 1.5rem;
+            background: rgba(0,0,0,0.2);
+            border-radius: 12px;
+            display: none;
+        }
+
+        .results-section h2 {
+            margin-top: 0;
+            margin-bottom: 1rem;
+            color: #60a5fa;
+        }
+
+        /* Markdown Styles */
+        .markdown-body {
+            color: var(--text-color);
+            line-height: 1.6;
+        }
+        
+        .markdown-body h3 {
+            color: #10b981;
+            margin-top: 1.5rem;
+            margin-bottom: 1rem;
+        }
+        
+        .markdown-body a {
+            color: #3b82f6;
+            text-decoration: none;
+        }
+        
+        .markdown-body a:hover {
+            text-decoration: underline;
+        }
+        
+        .markdown-body ul {
+            padding-left: 1.5rem;
+        }
+        
+        .markdown-body li {
+            margin-bottom: 0.5rem;
+        }
+
+        .markdown-body img {
+            max-width: 100%;
+            width: 320px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+            margin-top: 0.5rem;
+            margin-bottom: 0.5rem;
+            transition: transform 0.2s;
+            display: block;
+        }
+
+        .markdown-body img:hover {
+            transform: scale(1.02);
+        }
+
+        .loader {
+            display: none;
+            text-align: center;
+            margin: 2rem 0;
+            color: var(--text-muted);
+        }
+
+        .home-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: #60a5fa;
+            text-decoration: none;
+        }
+        
+        .home-link:hover {
+            text-decoration: underline;
+        }
+        
+        #language-group {
+            display: none;
+        }
+    </style>
+</head>
+<body class="dark-mode">
+    <div class="learn-container">
+        <a href="/home.html" class="home-link">← Back to Home</a>
+        
+        <div class="header">
+            <h1>Learn a New Topic</h1>
+            <p>Enter a topic and find the best resources tailored for you.</p>
+        </div>
+
+        <div class="input-group">
+            <label for="topic">What do you want to learn?</label>
+            <input type="text" id="topic" placeholder="e.g. Machine Learning, Python Basics, Data Structures..." required>
+        </div>
+
+        <div class="input-group">
+            <label for="mode">Preferred Learning Mode</label>
+            <select id="mode" onchange="toggleLanguage()">
+                <option value="youtube">▶️ YouTube Videos</option>
+                <option value="online">🌐 Online Text Resources (GFG, W3Schools, etc.)</option>
+                <option value="papers">📄 Research Papers (arXiv Free Access)</option>
+            </select>
+        </div>
+
+        <div class="input-group" id="language-group">
+            <label for="language">Language Preference</label>
+            <select id="language">
+                <option value="English">English</option>
+                <option value="Hindi">Hindi</option>
+                <option value="Spanish">Spanish</option>
+                <option value="French">French</option>
+                <option value="German">German</option>
+                <option value="Mandarin">Mandarin</option>
+                <option value="Telugu">Telugu</option>
+                <option value="Tamil">Tamil</option>
+            </select>
+        </div>
+
+        <button class="btn-search" id="search-btn" onclick="searchResources()">Find Resources ✨</button>
+
+        <div class="loader" id="loader">
+            Searching the web & knowledge bases... please wait ⏳
+        </div>
+
+        <div class="results-section" id="results-section">
+            <h2 id="results-title">Your Learning Plan</h2>
+            <div id="results-content" class="markdown-body"></div>
+        </div>
+    </div>
+
+    <script>
+        // Init state
+        toggleLanguage();
+
+        // Show/hide language dropdown based on mode
+        function toggleLanguage() {
+            const mode = document.getElementById('mode').value;
+            const langGroup = document.getElementById('language-group');
+            if (mode === 'youtube') {
+                langGroup.style.display = 'block';
+            } else {
+                langGroup.style.display = 'none';
+            }
+        }
+
+        async function searchResources() {
+            const topic = document.getElementById('topic').value.trim();
+            const mode = document.getElementById('mode').value;
+            const language = document.getElementById('language').value;
+            
+            if (!topic) {
+                alert("Please enter a topic to learn!");
+                return;
+            }
+
+            // UI updates
+            const btn = document.getElementById('search-btn');
+            const loader = document.getElementById('loader');
+            const resultsSection = document.getElementById('results-section');
+            const resultsContent = document.getElementById('results-content');
+            
+            btn.disabled = true;
+            loader.style.display = 'block';
+            resultsSection.style.display = 'none';
+            resultsContent.innerHTML = '';
+
+            let endpoint = '';
+            let payload = { topic };
+
+            if (mode === 'youtube') {
+                endpoint = '/learn/youtube';
+                payload.language = language;
+            } else if (mode === 'online') {
+                endpoint = '/learn/resources';
+            } else if (mode === 'papers') {
+                endpoint = '/learn/papers';
+            }
+
+            try {
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    // Render markdown response
+                    resultsContent.innerHTML = marked.parse(data.result || data.extracted_info || "No results found.");
+                    
+                    // Add fallback for ANY broken image loads
+                    resultsContent.querySelectorAll('img').forEach(img => {
+                        img.addEventListener('error', function() {
+                            this.src = 'https://dummyimage.com/320x180/1a1a1a/ef4444.png&text=Thumbnail+Unavailable';
+                        }, { once: true });
+                    });
+                    
+                    resultsSection.style.display = 'block';
+                } else {
+                    resultsContent.innerHTML = `<p style="color:#ef4444;">Error: ${data.error || 'Failed to fetch'}</p>`;
+                    resultsSection.style.display = 'block';
+                }
+            } catch (error) {
+                resultsContent.innerHTML = `<p style="color:#ef4444;">Network Error: ${error.message}</p>`;
+                resultsSection.style.display = 'block';
+            } finally {
+                btn.disabled = false;
+                loader.style.display = 'none';
+            }
+        }
+    </script>
+</body>
+</html>

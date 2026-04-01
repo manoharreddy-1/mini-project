@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='chatgpt.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* Markdown rendering styles inside answer boxes */
+        .llm-box h1, .llm-box h2, .llm-box h3, .llm-box h4 {
+            color: #e2e8f0;
+            margin-top: 1rem;
+            margin-bottom: 0.4rem;
+            font-size: 1rem;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            padding-bottom: 0.3rem;
+        }
+        .llm-box ul, .llm-box ol {
+            padding-left: 1.4rem;
+            margin: 0.5rem 0;
+        }
+        .llm-box li {
+            margin-bottom: 0.3rem;
+            color: rgba(255,255,255,0.85);
+        }
+        .llm-box strong {
+            color: #34d399;
+            font-weight: 700;
+        }
+        .llm-box em {
+            color: #93c5fd;
+        }
+        .llm-box p {
+            margin: 0.4rem 0;
+            color: rgba(255,255,255,0.8);
+        }
+        .llm-box code {
+            background: rgba(255,255,255,0.1);
+            padding: 0.15rem 0.4rem;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 0.88rem;
+        }
+        .llm-box blockquote {
+            border-left: 3px solid var(--primary);
+            padding-left: 0.8rem;
+            color: rgba(255,255,255,0.6);
+            margin: 0.5rem 0;
+        }
+
+        body {
+            overflow-y: auto;
+            justify-content: flex-start;
+        }
+
+        .split-pane {
+            display: flex;
+            gap: 2rem;
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+            min-height: calc(100vh - 100px);
+        }
+
+        .upload-panel {
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 16px;
+            padding: 2rem;
+            flex: 1;
+            max-width: 350px;
+            height: fit-content;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        .chat-panel { 
+            flex: 2;
+            background: rgba(15, 23, 42, 0.4);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 2.5rem;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .llm-box {
+            flex: 1;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 1.5rem;
+            border-radius: 12px;
+            overflow-y: auto;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s;
+        }
+
+        .llm-box:hover {
+            border-color: rgba(255, 255, 255, 0.2);
+            background: rgba(0, 0, 0, 0.4);
+        }
+        
+        .score-box {
+            background: linear-gradient(135deg, var(--primary), #0284c7);
+            color: white;
+            padding: 0.6rem 1.2rem;
+            border-radius: 50px;
+            font-weight: bold;
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+        }
+
+        /* ── Modern Chat-style Input Bar ── */
+        .input-area {
+            width: 100%;
+            max-width: 900px;
+            margin: 0 auto;
+            position: relative;
+        }
+        .input-container {
+            display: flex;
+            align-items: flex-end;
+            gap: 0.5rem;
+            padding: 0.6rem 0.75rem;
+            background: rgba(30, 41, 59, 0.7);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            backdrop-filter: blur(10px);
+        }
+        .chat-input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: #f8fafc;
+            padding: 0.6rem 0.4rem;
+            font-size: 1rem;
+            resize: none;
+            outline: none;
+            font-family: inherit;
+            line-height: 1.5;
+            max-height: 200px;
+        }
+        .attach-btn {
+            background: transparent;
+            border: 1.5px solid rgba(255,255,255,0.15);
+            border-radius: 50%;
+            width: 36px;
+            height: 36px;
+            font-size: 1.4rem;
+            line-height: 1;
+            color: #94a3b8;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: all 0.2s;
+        }
+        .attach-btn:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+            background: rgba(16,185,129,0.08);
+        }
+        .send-btn {
+            background: var(--primary);
+            border: none;
+            border-radius: 50%;
+            width: 38px;
+            height: 38px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: transform 0.2s;
+            color: #fff;
+            flex-shrink: 0;
+        }
+        .send-btn:hover { transform: scale(1.05); }
+
+        /* ── Attachments preview bar ── */
+        #attachment-preview {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            padding: 0.4rem 0.75rem 0.5rem;
+        }
+        .attachment-chip {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            background: rgba(255,255,255,0.07);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 20px;
+            padding: 0.25rem 0.65rem;
+            font-size: 0.78rem;
+            color: #cbd5e1;
+        }
+        .attachment-chip button {
+            background: none;
+            border: none;
+            color: #64748b;
+            cursor: pointer;
+            font-size: 0.85rem;
+            padding: 0;
+            line-height: 1;
+        }
+        .attachment-chip button:hover { color: #ef4444; }
+
+        /* ── Chart Container ── */
+        .chart-container {
+            width: 300px;
+            height: 250px;
+            margin: 0 auto;
+        }
+
+        header {
+            padding: 1.5rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(15, 23, 42, 0.4);
+            backdrop-filter: blur(10px);
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #10b981, #3b82f6);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+    </style>
+</head>
+<body class="dark-mode" style="flex-direction: column;">
+    <header>
+        <div class="logo">ScholarRAG</div>
+        <nav>
+            <a href="home.html" style="color:var(--text-muted); text-decoration:none; font-weight:600; margin-right:1.5rem;">Home</a>
+            <!-- <a href="quiz.html" style="color:var(--primary); text-decoration:none; font-weight:600; margin-right:1.5rem;">Take a Quiz</a> -->
+            <button id="theme-toggle" style="background:transparent; border:none; cursor:pointer; font-size:1.2rem; filter: grayscale(1);">🌙</button>
+        </nav>
+    </header>
+
+    <main style="width: 100%; flex: 1; display:flex; flex-direction:column; align-items:center; padding: 2rem;">
+        
+        <div style="width:100%; max-width:1000px; text-align:center; margin-bottom:2rem;">
+            <h2 style="font-size:2.5rem; margin-bottom:0.5rem; margin-top:0;">⚖️ Comparative Research</h2>
+            <p style="color: var(--text-muted); font-size:1.1rem;">Analyze the difference between standard AI and grounded RAG PDF responses.</p>
+        </div>
+
+        <div class="input-area">
+            <div id="attachment-preview"></div>
+            <div class="input-container">
+                <button class="attach-btn" id="attach-btn" title="Attach PDF" onclick="document.getElementById('file-input').click()">+</button>
+                <input type="file" id="file-input" accept=".pdf" style="display:none;" onchange="handleFileSelect(event)">
+                
+                <textarea
+                    id="query"
+                    class="chat-input"
+                    placeholder="Ask a question about the uploaded document..."
+                    rows="1"
+                    oninput="this.style.height='';this.style.height=this.scrollHeight+'px'"
+                ></textarea>
+                
+                <button class="send-btn" id="ask-btn" onclick="submitComparativeQuery()">➤</button>
+            </div>
+            <div id="upload-status" style="text-align:center; font-size: 0.9rem; margin-top:0.5rem;"></div>
+        </div>
+
+        <!-- Right Panel: Comparative RAG Chat -->
+        <div class="chat-panel" id="results-area" style="display:none; width:100%; max-width:1200px; margin-top:2rem;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom: 1.5rem;">
+                <h3 style="margin:0;">Analysis Results</h3>
+                <div class="chart-container">
+                    <canvas id="accuracyChart"></canvas>
+                </div>
+            </div>
+            <div style="display:flex; gap: 1.5rem; flex: 1;">
+                <div class="llm-box">
+                    <h4 style="margin-top:0; color:#f43f5e; display:flex; align-items:center; gap:0.5rem;">
+                        <span>⚠️</span> Standard LLM
+                    </h4>
+                    <div id="plain-ans" style="line-height: 1.6; color: rgba(255,255,255,0.8);">Generating baseline...</div>
+                </div>
+                <div class="llm-box">
+                    <h4 style="margin-top:0; color:#10b981; display:flex; align-items:center; gap:0.5rem;">
+                        <span>✅</span> RAG Grounded Answer
+                    </h4>
+                    <div id="rag-ans" style="line-height: 1.6; color: rgba(255,255,255,0.8);">Consulting Knowledge Base...</div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        const API_BASE = window.location.origin;
+
+        let pendingFiles = [];
+        let chartInstance = null;
+
+        function handleFileSelect(event) {
+            const files = Array.from(event.target.files);
+            pendingFiles = [...pendingFiles, ...files];
+            renderAttachmentPreviews();
+            event.target.value = '';
+        }
+
+        function removePendingFile(idx) {
+            pendingFiles.splice(idx, 1);
+            renderAttachmentPreviews();
+        }
+
+        function renderAttachmentPreviews() {
+            const bar = document.getElementById('attachment-preview');
+            bar.innerHTML = '';
+            pendingFiles.forEach((f, i) => {
+                const chip = document.createElement('div');
+                chip.className = 'attachment-chip';
+                chip.innerHTML = `📄 <span title="${f.name}">${f.name.length > 20 ? f.name.substring(0,18)+'…' : f.name}</span>
+                    <button onclick="removePendingFile(${i})" title="Remove">✕</button>`;
+                bar.appendChild(chip);
+            });
+        }
+
+        function updateChart(ragScorePercentage, plainScorePercentage) {
+            const ctx = document.getElementById('accuracyChart').getContext('2d');
+            
+            if (chartInstance) {
+                chartInstance.destroy();
+            }
+
+            chartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Standard LLM', 'RAG Answer'],
+                    datasets: [{
+                        label: 'Accuracy (Faithfulness)',
+                        data: [plainScorePercentage, ragScorePercentage],
+                        backgroundColor: [
+                            'rgba(244, 63, 94, 0.8)', // Red for Standard LLM
+                            'rgba(16, 185, 129, 0.8)' // Green for RAG
+                        ],
+                        borderColor: [
+                            '#f43f5e',
+                            '#10b981'
+                        ],
+                        borderWidth: 1,
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { 
+                            beginAtZero: true, 
+                            max: 100,
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            },
+                            ticks: {
+                                color: 'rgba(255, 255, 255, 0.7)'
+                            }
+                        },
+                        x: {
+                            grid: {
+                                display: false
+                            },
+                            ticks: {
+                                color: 'rgba(255, 255, 255, 0.9)'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `Accuracy: ${context.parsed.y}%`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Combined Upload and Chat Logic
+        async function submitComparativeQuery() {
+            const btn = document.getElementById('ask-btn');
+            const queryInput = document.getElementById('query');
+            const query = queryInput.value.trim();
+            const statusBox = document.getElementById('upload-status');
+            
+            if(!query) return;
+
+            btn.disabled = true;
+            statusBox.style.color = "var(--text-muted)";
+            statusBox.innerText = "";
+            
+            document.getElementById('results-area').style.display = 'flex';
+            document.getElementById('plain-ans').innerHTML = "<i>Generating baseline...</i>";
+            document.getElementById('rag-ans').innerHTML = "<i>Consulting Knowledge Base...</i>";
+            
+            try {
+                // 1. Upload files first if pending
+                if(pendingFiles.length > 0) {
+                    for(const file of pendingFiles) {
+                        const formData = new FormData();
+                        formData.append('file', file);
+                        formData.append('subject_name', 'Research Subject');
+                        formData.append('unit_number', '1');
+                        
+                        statusBox.innerText = `Ingesting ${file.name} context...`;
+                        
+                        const uploadRes = await fetch(`${API_BASE}/rag/upload`, {
+                            method: 'POST',
+                            body: formData
+                        });
+                        
+                        if(!uploadRes.ok) {
+                            const errRaw = await uploadRes.json().catch(()=>({error:"Upload failed"}));
+                            throw new Error(errRaw.error || 'Upload error');
+                        }
+                    }
+                    statusBox.innerText = "Ingestion complete. Analyzing...";
+                    pendingFiles = []; // Clear queue after success
+                    renderAttachmentPreviews();
+                } else {
+                    statusBox.innerText = "Analyzing query...";
+                }
+
+                // 2. Query comparison API
+                const res = await fetch(`${API_BASE}/rag/comparative_chat`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({query})
+                });
+                
+                if (!res.ok) {
+                    const errorData = await res.json().catch(()=>({error:"Failed to get comparison"}));
+                    throw new Error(errorData.error || "Failed to get comparison");
+                }
+                
+                const data = await res.json();
+                
+                document.getElementById('plain-ans').innerHTML = marked.parse(data.plain_llm_answer || '');
+                document.getElementById('rag-ans').innerHTML = marked.parse(data.rag_grounded_answer || '');
+                
+                const ragScoreRaw = parseFloat(data.faithfulness_score);
+                const plainScoreRaw = parseFloat(data.plain_faithfulness_score);
+                const ragScore = isNaN(ragScoreRaw) ? 0 : (ragScoreRaw * 100).toFixed(0);
+                const plainScore = isNaN(plainScoreRaw) ? 0 : (plainScoreRaw * 100).toFixed(0);
+                updateChart(parseInt(ragScore), parseInt(plainScore));
+                
+                statusBox.innerText = "";
+                queryInput.value = "";
+                queryInput.style.height = 'auto'; // Reset textarea height
+
+            } catch (err) {
+                statusBox.style.color = "#f43f5e";
+                statusBox.innerText = "✖ " + err.message;
+                document.getElementById('plain-ans').innerHTML = `<span style="color:#f43f5e">Error: ${err.message}</span>`;
+                document.getElementById('rag-ans').innerHTML = "Attempt failed.";
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        // Enter to send
+        document.getElementById('query').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                submitComparativeQuery();
+            }
+        });
+
+        const themeToggle = document.getElementById('theme-toggle');
+        if(themeToggle) {
+            themeToggle.addEventListener('click', () => {
+                document.body.classList.toggle('dark-mode');
+                document.body.classList.toggle('light-mode');
+            });
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+Traceback (most recent call last):
+  File "<string>", line 7, in <module>
+    build_vector_store(docs)
+    ~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\manoh\OneDrive\Desktop\MINI PROJECT\backend\rag_engine.py", line 172, in build_vector_store
+    raise Exception("PDF ingestion failed after trying all API keys/models. Please try again shortly.")
+Exception: PDF ingestion failed after trying all API keys/models. Please try again shortly.

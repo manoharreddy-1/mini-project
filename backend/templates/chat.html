@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ScholarRAG – Tutor</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='chatgpt.css') }}">
+    <style>
+        /* ── Attachment menu ── */
+        .attach-menu {
+            position: absolute;
+            bottom: calc(100% + 10px);
+            left: 0;
+            background: rgba(15, 23, 42, 0.95);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 14px;
+            padding: 0.5rem;
+            display: none;
+            flex-direction: column;
+            gap: 0.25rem;
+            min-width: 180px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+            z-index: 100;
+            backdrop-filter: blur(20px);
+        }
+        .attach-menu.open { display: flex; }
+        .attach-menu-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.6rem 0.9rem;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            color: #f1f5f9;
+            transition: background 0.15s;
+            white-space: nowrap;
+        }
+        .attach-menu-item:hover { background: rgba(255,255,255,0.1); }
+        .attach-menu-item .ic { font-size: 1.1rem; }
+
+        /* ── + button ── */
+        .attach-btn {
+            background: transparent;
+            border: 1.5px solid rgba(255,255,255,0.15);
+            border-radius: 50%;
+            width: 36px;
+            height: 36px;
+            font-size: 1.4rem;
+            line-height: 1;
+            color: #94a3b8;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: all 0.2s;
+            position: relative;
+        }
+        .attach-btn:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+            background: rgba(16,185,129,0.08);
+        }
+        .attach-btn.active {
+            border-color: var(--primary);
+            color: var(--primary);
+            transform: rotate(45deg);
+        }
+
+        /* ── Mic button ── */
+        .mic-btn {
+            background: transparent;
+            border: 1.5px solid rgba(255,255,255,0.15);
+            border-radius: 50%;
+            width: 36px;
+            height: 36px;
+            font-size: 1.05rem;
+            color: #94a3b8;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: all 0.2s;
+        }
+        .mic-btn:hover {
+            border-color: #3b82f6;
+            color: #3b82f6;
+            background: rgba(59,130,246,0.08);
+        }
+        .mic-btn.recording {
+            border-color: #ef4444;
+            color: #ef4444;
+            background: rgba(239,68,68,0.12);
+            animation: pulse-mic 1s infinite;
+        }
+        @keyframes pulse-mic {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.4); }
+            50%       { box-shadow: 0 0 0 6px rgba(239,68,68,0); }
+        }
+
+        /* ── Re-style input container to hold the 3 elements ── */
+        .input-container {
+            display: flex;
+            align-items: flex-end;
+            gap: 0.5rem;
+            padding: 0.6rem 0.75rem;
+        }
+
+        /* ── Attachments preview bar ── */
+        #attachment-preview {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            padding: 0.4rem 0.75rem 0;
+        }
+        .attachment-chip {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            background: rgba(255,255,255,0.07);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 20px;
+            padding: 0.25rem 0.65rem;
+            font-size: 0.78rem;
+            color: #cbd5e1;
+        }
+        .attachment-chip button {
+            background: none;
+            border: none;
+            color: #64748b;
+            cursor: pointer;
+            font-size: 0.85rem;
+            padding: 0;
+            line-height: 1;
+        }
+        .attachment-chip button:hover { color: #ef4444; }
+
+        /* ── Thinking indicator (no span) ── */
+        .thinking-dots {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            color: var(--text-muted);
+            font-style: italic;
+            font-size: 0.93rem;
+        }
+        .thinking-dots i {
+            width: 6px; height: 6px;
+            background: currentColor;
+            border-radius: 50%;
+            display: inline-block;
+            animation: dot-bounce 1.2s infinite ease-in-out;
+        }
+        .thinking-dots i:nth-child(2) { animation-delay: 0.2s; }
+        .thinking-dots i:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes dot-bounce {
+            0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+            40%            { transform: translateY(-4px); opacity: 1; }
+        }
+    </style>
+</head>
+<body class="chat-layout">
+
+    <!-- Sidebar History -->
+    <div class="sidebar">
+        <div style="padding: 1rem; border-bottom: 1px solid rgba(255,255,255,0.05);">
+            <a href="home.html" style="color:var(--text-muted); text-decoration:none; font-weight:600; display:flex; align-items:center; gap:0.5rem;">
+                🏠 Home
+            </a>
+        </div>
+        <button class="new-chat-btn" onclick="createNewSession()">
+            <span style="font-size:1.2rem;">+</span> New Chat
+        </button>
+        <div class="history-list" id="history-list"></div>
+        <div style="padding: 1rem; border-top: 1px solid var(--border-color); font-size: 0.875rem;">
+            <span id="user-email">user@example.com</span>
+            <span style="float:right; cursor:pointer; color:var(--text-muted);" onclick="logout()">Log out</span>
+        </div>
+    </div>
+
+    <!-- Main Chat Area -->
+    <div class="main-chat">
+
+        <div class="chat-thread" id="chat-thread">
+            <div class="message ai">
+                <div class="message-content">
+                    <div class="avatar ai-av">AI</div>
+                    <div>Hello! I'm your ScholarRAG tutor. What do you want to learn today from the course notes?</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Input Bar -->
+        <div class="input-area">
+            <!-- Attachment previews sit above the input -->
+            <div id="attachment-preview"></div>
+
+            <div class="input-container" style="position:relative;">
+
+                <!-- + Attach Button (left) -->
+                <div style="position:relative; flex-shrink:0;">
+                    <button class="attach-btn" id="attach-btn" title="Attach file" onclick="toggleAttachMenu(event)">+</button>
+                    <div class="attach-menu" id="attach-menu">
+                        <div class="attach-menu-item" onclick="triggerFileInput('image/*','📷 Image')">
+                            <span class="ic">🖼️</span> Image
+                        </div>
+                        <div class="attach-menu-item" onclick="triggerFileInput('video/*','🎬 Video')">
+                            <span class="ic">🎬</span> Video
+                        </div>
+                        <div class="attach-menu-item" onclick="triggerFileInput('.pdf,.doc,.docx,.txt,.ppt,.pptx','📄 Document')">
+                            <span class="ic">📄</span> Document
+                        </div>
+                        <div class="attach-menu-item" onclick="triggerFileInput('*','📎 Any File')">
+                            <span class="ic">📎</span> Any File
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Hidden file input -->
+                <input type="file" id="file-input" style="display:none;" multiple onchange="handleFileSelect(event)">
+
+                <!-- Textarea (middle) -->
+                <textarea
+                    id="prompt-input"
+                    class="chat-input"
+                    placeholder="Send a message..."
+                    rows="1"
+                    oninput="this.style.height='';this.style.height=this.scrollHeight+'px'"
+                ></textarea>
+
+                <!-- Mic Button (right, before send) -->
+                <button class="mic-btn" id="mic-btn" title="Voice input" onclick="toggleMic()">🎤</button>
+
+                <!-- Send Button -->
+                <button class="send-btn" id="send-btn" onclick="sendMessage()">➤</button>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- JS Logic -->
+    <script>
+        const API_BASE = window.location.origin;
+        const userId   = localStorage.getItem('rag_user_id');
+        let currentSessionId = null;
+        let pendingFiles = [];   // files chosen via + menu
+
+        if (!userId) window.location.href = "/";
+        document.getElementById('user-email').innerText = localStorage.getItem('rag_email') || "User";
+
+        function logout() {
+            localStorage.clear();
+            window.location.href = "/";
+        }
+
+        /* ──────────────────────────────
+           ATTACHMENT MENU
+        ────────────────────────────── */
+        function toggleAttachMenu(e) {
+            e.stopPropagation();
+            const menu = document.getElementById('attach-menu');
+            const btn  = document.getElementById('attach-btn');
+            const open = menu.classList.toggle('open');
+            btn.classList.toggle('active', open);
+        }
+
+        // Close menu when clicking elsewhere
+        document.addEventListener('click', () => {
+            document.getElementById('attach-menu').classList.remove('open');
+            document.getElementById('attach-btn').classList.remove('active');
+        });
+
+        function triggerFileInput(accept, label) {
+            const inp = document.getElementById('file-input');
+            inp.accept = accept;
+            inp.click();
+            document.getElementById('attach-menu').classList.remove('open');
+            document.getElementById('attach-btn').classList.remove('active');
+        }
+
+        function handleFileSelect(event) {
+            const files = Array.from(event.target.files);
+            files.forEach(f => addPendingFile(f));
+            event.target.value = '';   // reset so same file can be re-added
+        }
+
+        function addPendingFile(file) {
+            pendingFiles.push(file);
+            renderAttachmentPreviews();
+        }
+
+        function removePendingFile(idx) {
+            pendingFiles.splice(idx, 1);
+            renderAttachmentPreviews();
+        }
+
+        function renderAttachmentPreviews() {
+            const bar = document.getElementById('attachment-preview');
+            bar.innerHTML = '';
+            pendingFiles.forEach((f, i) => {
+                const chip = document.createElement('div');
+                chip.className = 'attachment-chip';
+                const icon = f.type.startsWith('image') ? '🖼️'
+                           : f.type.startsWith('video') ? '🎬'
+                           : '📄';
+                chip.innerHTML = `${icon} <span title="${f.name}">${f.name.length > 22 ? f.name.substring(0,20)+'…' : f.name}</span>
+                    <button onclick="removePendingFile(${i})" title="Remove">✕</button>`;
+                bar.appendChild(chip);
+            });
+        }
+
+        /* ──────────────────────────────
+           MICROPHONE / VOICE INPUT
+        ────────────────────────────── */
+        let recognition = null;
+        let isRecording = false;
+
+        function toggleMic() {
+            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                alert('Voice input is not supported in this browser. Please use Chrome or Edge.');
+                return;
+            }
+            if (isRecording) {
+                recognition.stop();
+                return;
+            }
+
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
+            recognition.lang = 'en-US';
+            recognition.interimResults = true;
+            recognition.continuous = false;
+
+            const micBtn  = document.getElementById('mic-btn');
+            const input   = document.getElementById('prompt-input');
+            const baseVal = input.value;
+
+            recognition.onstart = () => {
+                isRecording = true;
+                micBtn.classList.add('recording');
+                micBtn.title = 'Listening… click to stop';
+            };
+
+            recognition.onresult = (e) => {
+                let interim = '';
+                let final   = '';
+                for (let r of e.results) {
+                    if (r.isFinal) final   += r[0].transcript;
+                    else           interim += r[0].transcript;
+                }
+                input.value = baseVal + (final || interim);
+                input.style.height = '';
+                input.style.height = input.scrollHeight + 'px';
+            };
+
+            recognition.onerror = (e) => {
+                console.warn('Speech recognition error:', e.error);
+            };
+
+            recognition.onend = () => {
+                isRecording = false;
+                micBtn.classList.remove('recording');
+                micBtn.title = 'Voice input';
+                recognition = null;
+            };
+
+            recognition.start();
+        }
+
+        /* ──────────────────────────────
+           SESSION MANAGEMENT
+        ────────────────────────────── */
+        async function loadSessions() {
+            try {
+                const res = await fetch(`${API_BASE}/chat/sessions/${userId}`);
+                const sessions = await res.json();
+
+                const list = document.getElementById('history-list');
+                list.innerHTML = '';
+
+                sessions.forEach(s => {
+                    const el = document.createElement('div');
+                    el.className = 'history-item';
+                    el.innerText = s.title;
+                    el.onclick = () => loadHistory(s.id);
+                    list.appendChild(el);
+                });
+
+                if (sessions.length > 0) loadHistory(sessions[0].id);
+                else createNewSession();
+            } catch(e) {
+                console.error("Failed to load sessions", e);
+            }
+        }
+
+        async function createNewSession() {
+            try {
+                const res = await fetch(`${API_BASE}/chat/session/new`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({user_id: userId})
+                });
+                const data = await res.json();
+                currentSessionId = data.session_id;
+
+                document.getElementById('chat-thread').innerHTML = `
+                    <div class="message ai">
+                        <div class="message-content">
+                            <div class="avatar ai-av">AI</div>
+                            <div>New chat started! Ask me anything about your inserted notes.</div>
+                        </div>
+                    </div>`;
+
+                loadSessions();
+            } catch (e) {
+                console.error("Failed creating session", e);
+            }
+        }
+
+        async function loadHistory(sessionId) {
+            currentSessionId = sessionId;
+            try {
+                const res = await fetch(`${API_BASE}/chat/history/${sessionId}`);
+                const history = await res.json();
+
+                const thread = document.getElementById('chat-thread');
+                thread.innerHTML = '';
+
+                if (history.length === 0) {
+                    thread.innerHTML = `
+                    <div class="message ai">
+                        <div class="message-content">
+                            <div class="avatar ai-av">AI</div>
+                            <div>Hello! Ask me anything about the local data folder notes.</div>
+                        </div>
+                    </div>`;
+                }
+
+                history.forEach(msg => appendMessage(msg.role, msg.content, msg.id));
+                scrollToBottom();
+
+                document.querySelectorAll('.history-item').forEach(el => el.classList.remove('active'));
+            } catch (e) {
+                console.error("Failed loading history", e);
+            }
+        }
+
+        /* ──────────────────────────────
+           SEND MESSAGE
+        ────────────────────────────── */
+        async function sendMessage() {
+            const input = document.getElementById('prompt-input');
+            const query = input.value.trim();
+            if (!query || !currentSessionId) return;
+
+            const btn = document.getElementById('send-btn');
+            input.value = '';
+            input.style.height = 'auto';
+            btn.disabled = true;
+
+            // Show user message (with attachment names if any)
+            let userDisplay = query;
+            if (pendingFiles.length) {
+                const names = pendingFiles.map(f => f.name).join(', ');
+                userDisplay += `<div style="margin-top:0.4rem; font-size:0.78rem; color:#94a3b8;">📎 ${names}</div>`;
+            }
+            const filesToUpload = [...pendingFiles];
+            pendingFiles = [];
+            renderAttachmentPreviews();
+
+            appendMessage('user', userDisplay);
+            scrollToBottom();
+
+            // Thinking indicator — no <span>, uses styled divs
+            const loadingId = "msg-" + Date.now();
+            const thinkHtml = `<div class="thinking-dots">Thinking via RAG<i></i><i></i><i></i></div>`;
+            appendMessage('ai', thinkHtml, loadingId);
+            scrollToBottom();
+
+            try {
+                // If there are files, upload the first one (since backend expects one 'file' field for now, or you could loop)
+                if (filesToUpload.length > 0) {
+                    for (const file of filesToUpload) {
+                        const formData = new FormData();
+                        formData.append('file', file);
+                        formData.append('subject_name', 'Uploaded Notes');
+                        formData.append('unit_number', '1');
+                        
+                        // Optional: update loading indicator to show uploading
+                        const loadBubble = document.getElementById(loadingId);
+                        if (loadBubble) {
+                            loadBubble.innerHTML = `<div class="thinking-dots">Uploading ${file.name}<i></i><i></i><i></i></div>`;
+                        }
+                        
+                        const uploadRes = await fetch(`${API_BASE}/rag/upload`, {
+                            method: 'POST',
+                            body: formData
+                        });
+                        
+                        if (!uploadRes.ok) {
+                            const errData = await uploadRes.json();
+                            throw new Error(errData.error || `Upload failed with status ${uploadRes.status}`);
+                        }
+                    }
+                    
+                    // Restore thinking indicator for RAG
+                    const loadBubble = document.getElementById(loadingId);
+                    if (loadBubble) {
+                        loadBubble.innerHTML = thinkHtml;
+                    }
+                }
+
+                const res = await fetch(`${API_BASE}/chat/message`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({session_id: currentSessionId, user_id: userId, query})
+                });
+
+                if (!res.ok) throw new Error(`Server returned ${res.status}`);
+
+                const data = await res.json();
+
+                const loadBubble = document.getElementById(loadingId);
+                if (loadBubble) {
+                    loadBubble.innerHTML = `<div class="message-content">
+                        <div class="avatar ai-av">AI</div>
+                        <div style="flex:1;">
+                            <div style="margin-bottom:0.5rem;">${formatText(data.content || "No response received.")}</div>
+                            <div style="font-size:0.75rem; color:var(--primary);">✦ Context blocks used: ${data.context_sources || 0}</div>
+                        </div>
+                    </div>`;
+                }
+                scrollToBottom();
+                setTimeout(() => loadSessions(), 500);
+
+            } catch(e) {
+                console.error("SendMessage Error:", e);
+                const loadBubble = document.getElementById(loadingId);
+                if (loadBubble) {
+                    loadBubble.innerHTML = `<div class="message-content"><div class="avatar ai-av">AI</div><div style="color:#ef4444;">Error generating response. Make sure the backend LLM is running correctly.</div></div>`;
+                }
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        /* ──────────────────────────────
+           HELPERS
+        ────────────────────────────── */
+        function appendMessage(role, text, id_override) {
+            const thread = document.getElementById('chat-thread');
+            const el = document.createElement('div');
+            el.className = `message ${role}`;
+            if (id_override) el.id = id_override;
+
+            const avatar   = role === 'user'
+                ? `<div class="avatar user-av">U</div>`
+                : `<div class="avatar ai-av">AI</div>`;
+            const formatted = formatText(text);
+
+            el.innerHTML = `
+                <div class="message-content">
+                    ${avatar}
+                    <div style="flex:1; overflow-x:auto;">${formatted}</div>
+                </div>`;
+
+            thread.appendChild(el);
+        }
+
+        function scrollToBottom() {
+            const thread = document.getElementById('chat-thread');
+            thread.scrollTop = thread.scrollHeight;
+        }
+
+        function formatText(text) {
+            if (!text || !text.includes) return text;
+            let val = text.replace(/\\n/g, '<br>');
+            val = val.replace(/\n/g, '<br>'); // Replace actual newline characters
+            val = val.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            val = val.replace(/### (.*?)(<br>|$)/g, '<h3 style="margin: 0.5rem 0; color: #f8fafc;">$1</h3>');
+            return val;
+        }
+
+        // Enter to send, Shift+Enter for newline
+        document.getElementById('prompt-input').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        loadSessions();
+    </script>
+</body>
+</html>

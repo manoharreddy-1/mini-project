@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ScholarRAG - Login</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='chatgpt.css') }}">
+</head>
+<body>
+    <div class="auth-container">
+        <div class="auth-card">
+            <h2 id="auth-title">Welcome back</h2>
+            <p class="auth-subtitle" id="auth-subtitle">Log in to continue your learning journey.</p>
+            
+            <div class="auth-tabs" id="auth-tabs">
+                <div class="auth-tab active" id="tab-login" onclick="switchTab('login')">Log In</div>
+                <div class="auth-tab" id="tab-signup" onclick="switchTab('signup')">Sign Up</div>
+            </div>
+
+            <form id="auth-form">
+                <input type="email" id="email" class="input-field" placeholder="Email address" required />
+                <input type="password" id="password" class="input-field" placeholder="Password" required />
+                <button type="submit" class="btn-primary" id="auth-submit">Log In</button>
+            </form>
+            
+            <form id="otp-form" style="display: none;">
+                <p style="color: #8e8ea0; font-size:0.9rem; margin-bottom: 1rem;">We sent a verification code to your email.</p>
+                <input type="text" id="otp" class="input-field" placeholder="Enter code" required />
+                <button type="submit" class="btn-primary" id="otp-submit">Verify Account</button>
+            </form>
+            <div id="auth-msg" style="margin-top: 1rem; color: var(--primary); font-size: 0.9rem;"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        let tempEmail = "";
+        let currentMode = 'login'; // 'login' or 'signup'
+
+        function switchTab(mode) {
+            currentMode = mode;
+            document.getElementById('tab-login').classList.remove('active');
+            document.getElementById('tab-signup').classList.remove('active');
+            document.getElementById('tab-' + mode).classList.add('active');
+            
+            const submitBtn = document.getElementById('auth-submit');
+            const title = document.getElementById('auth-title');
+            const subtitle = document.getElementById('auth-subtitle');
+            
+            if(mode === 'login') {
+                title.innerText = "Welcome back";
+                subtitle.innerText = "Log in to continue your learning journey.";
+                submitBtn.innerText = "Log In";
+            } else {
+                title.innerText = "Create an account";
+                subtitle.innerText = "Join ScholarRAG to start learning.";
+                submitBtn.innerText = "Sign Up";
+            }
+            
+            document.getElementById('auth-form').style.display = 'block';
+            document.getElementById('otp-form').style.display = 'none';
+            document.getElementById('auth-tabs').style.display = 'flex';
+            document.getElementById('auth-msg').innerText = '';
+        }
+
+        document.getElementById('auth-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('auth-submit');
+            const msgBox = document.getElementById('auth-msg');
+            
+            tempEmail = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            btn.disabled = true;
+            btn.innerText = currentMode === 'login' ? "Logging in..." : "Sending code...";
+            msgBox.innerText = "";
+            msgBox.style.color = "var(--primary)";
+
+            try {
+                const endpoint = currentMode === 'login' ? '/auth/login' : '/auth/signup';
+                let res = await fetch(`${API_BASE}${endpoint}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({email: tempEmail, password: password})
+                });
+                
+                let data = await res.json();
+
+                if (res.ok) {
+                    if (currentMode === 'login') {
+                        // Instant login without OTP
+                        localStorage.setItem('rag_user_id', data.user_id);
+                        localStorage.setItem('rag_email', tempEmail);
+                        window.location.href = "/home.html";
+                    } else {
+                        // Signup requires OTP
+                        document.getElementById('auth-form').style.display = 'none';
+                        document.getElementById('auth-tabs').style.display = 'none';
+                        document.getElementById('otp-form').style.display = 'block';
+                        document.getElementById('auth-title').innerText = "Verify Email";
+                        document.getElementById('auth-subtitle').innerText = "Just one more step.";
+                        msgBox.innerText = "";
+                    }
+                } else {
+                    msgBox.style.color = "#ef4444";
+                    msgBox.innerText = data.error || "Request failed.";
+                }
+            } catch(e) {
+                msgBox.style.color = "#ef4444";
+                msgBox.innerText = "Network Error.";
+            } finally {
+                btn.disabled = false;
+                if(currentMode === 'login') {
+                    btn.innerText = "Log In";
+                } else {
+                    btn.innerText = "Sign Up";
+                }
+            }
+        });
+
+        document.getElementById('otp-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('otp-submit');
+            const msgBox = document.getElementById('auth-msg');
+            const otp = document.getElementById('otp').value;
+            
+            btn.disabled = true;
+            btn.innerText = "Verifying...";
+            
+            try {
+                const res = await fetch(`${API_BASE}/auth/verify`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({email: tempEmail, otp})
+                });
+                
+                const data = await res.json();
+                
+                if (res.ok) {
+                    localStorage.setItem('rag_user_id', data.user_id);
+                    localStorage.setItem('rag_email', tempEmail);
+                    window.location.href = "/home.html";
+                } else {
+                    msgBox.style.color = "#ef4444";
+                    msgBox.innerText = data.error || "Invalid Code.";
+                }
+            } catch(e) {
+                msgBox.style.color = "#ef4444";
+                msgBox.innerText = "Network Error.";
+            } finally {
+                btn.disabled = false;
+                btn.innerText = "Verify Account";
+            }
+        });
+
+        // Quick session check
+        if(localStorage.getItem('rag_user_id')) {
+            window.location.href = "/chat.html";
+        }
+    </script>
+</body>
+</html>

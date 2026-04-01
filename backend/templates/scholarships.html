@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scholarship Extractor - ScholarRAG</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='chatgpt.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        body {
+            overflow-y: auto;
+            justify-content: flex-start;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 900px;
+            margin: 3rem auto;
+            padding: 0 2rem;
+        }
+
+        .split-wrapper {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin-top: 2rem;
+            align-items: start;
+        }
+
+        @media (max-width: 900px) {
+            .split-wrapper {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .extractor-card {
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 24px;
+            padding: 2.5rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            animation: fadeIn 0.8s ease-out;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .input-bar {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 0.4rem;
+            display: flex;
+            gap: 0.5rem;
+            margin: 1.5rem 0;
+            transition: border-color 0.3s;
+        }
+
+        .input-bar:focus-within {
+            border-color: var(--primary);
+        }
+
+        .input-bar input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            padding: 0.8rem;
+            color: white;
+            font-size: 1rem;
+            outline: none;
+        }
+
+        .extract-btn {
+            background: linear-gradient(135deg, var(--primary), #0284c7);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            padding: 0 1.5rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+            white-space: nowrap;
+        }
+
+        .extract-btn:hover {
+            transform: scale(1.02);
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+        }
+
+        .results-panel {
+            margin-top: 1.5rem;
+            padding: 1.5rem;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            line-height: 1.8;
+            color: rgba(255, 255, 255, 0.9);
+            display: none;
+            font-size: 0.95rem;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .stat-badge {
+            display: inline-block;
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--primary);
+            padding: 0.2rem 0.6rem;
+            border-radius: 50px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+        .source-badge {
+            display: inline-block;
+            background: rgba(59, 130, 246, 0.15);
+            color: #60a5fa;
+            padding: 0.2rem 0.6rem;
+            border-radius: 50px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            margin-left: 0.4rem;
+        }
+        /* Markdown rendering inside results panel */
+        .results-panel h1,.results-panel h2,.results-panel h3,.results-panel h4 {
+            color: #e2e8f0;
+            margin-top: 1rem;
+            margin-bottom: 0.4rem;
+            font-size: 1rem;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            padding-bottom: 0.25rem;
+        }
+        .results-panel ul, .results-panel ol { padding-left: 1.4rem; margin: 0.4rem 0; }
+        .results-panel li { margin-bottom: 0.3rem; color: rgba(255,255,255,0.85); }
+        .results-panel strong { color: #34d399; font-weight: 700; }
+        .results-panel em { color: #93c5fd; }
+        .results-panel p { margin: 0.4rem 0; color: rgba(255,255,255,0.8); }
+        .results-panel code {
+            background: rgba(255,255,255,0.1);
+            padding: 0.15rem 0.4rem;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 0.85rem;
+        }
+
+        header {
+            padding: 1.5rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(15, 23, 42, 0.4);
+            backdrop-filter: blur(10px);
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #10b981, #3b82f6);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+    </style>
+</head>
+<body class="dark-mode" style="flex-direction: column;">
+    <header>
+        <div class="logo">ScholarRAG</div>
+        <nav>
+            <a href="home.html" style="color:var(--text-muted); text-decoration:none; font-weight:600; margin-right:1.5rem;">Home</a>
+            <a href="compare.html" style="color:var(--text-muted); text-decoration:none; font-weight:600; margin-right:1.5rem;">Knowledge Base</a>
+            <button id="theme-toggle" style="background:transparent; border:none; cursor:pointer; font-size:1.2rem; filter: grayscale(1);">🌙</button>
+        </nav>
+    </header>
+
+    <div class="container" style="max-width: 1200px;">
+        <h1 style="margin:0; font-size: 2.5rem; text-align: center;">🚀 Opportunity Scout</h1>
+        <p style="color: var(--text-muted); font-size: 1.1rem; text-align: center; margin-bottom: 2rem;">Search your Knowledge Base for specific scholarships and internships.</p>
+
+        <div class="split-wrapper">
+            <!-- Internship Section -->
+            <div class="extractor-card">
+                <h2 style="margin:0; font-size: 1.8rem;">💼 Internships</h2>
+                <p style="color: var(--text-muted); font-size: 0.95rem;">Find roles, requirements, and deadlines.</p>
+                
+                <form id="internship-form">
+                    <div class="input-bar">
+                        <input type="text" id="internship-query" placeholder="e.g. Java developer internships..." required />
+                        <button type="submit" class="extract-btn" id="internship-btn">Extract</button>
+                    </div>
+                </form>
+
+                <div class="results-area">
+                    <div id="internship-stats" style="display:none; margin-bottom:0.5rem;">
+                        <span class="stat-badge" id="internship-chunk-count">🌐 Global Data</span>
+                        <span class="source-badge" id="internship-source">Gemini AI</span>
+                    </div>
+                    <div class="results-panel" id="internship-results"></div>
+                    <div id="internship-status" style="text-align: center; color: var(--text-muted); display: none; margin-top: 1rem;">
+                        🔍 Generating live internship opportunities...
+                    </div>
+                </div>
+            </div>
+
+            <!-- Scholarship Section -->
+            <div class="extractor-card">
+                <h2 style="margin:0; font-size: 1.8rem;">🎓 Scholarships</h2>
+                <p style="color: var(--text-muted); font-size: 0.95rem;">Find eligibility and application details.</p>
+                
+                <form id="scholarship-form">
+                    <div class="input-bar">
+                        <input type="text" id="scholarship-query" placeholder="e.g. Merit scholarships 2024..." required />
+                        <button type="submit" class="extract-btn" id="scholarship-btn">Extract</button>
+                    </div>
+                </form>
+
+                <div class="results-area">
+                    <div id="scholarship-stats" style="display:none; margin-bottom:0.5rem;">
+                        <span class="stat-badge" id="scholarship-chunk-count">🌐 Global Data</span>
+                        <span class="source-badge" id="scholarship-source">Gemini AI</span>
+                    </div>
+                    <div class="results-panel" id="scholarship-results"></div>
+                    <div id="scholarship-status" style="text-align: center; color: var(--text-muted); display: none; margin-top: 1rem;">
+                        🔍 Generating live scholarship opportunities...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+
+        async function handleExtraction(type) {
+            const query = document.getElementById(`${type}-query`).value;
+            const btn = document.getElementById(`${type}-btn`);
+            const resultsPanel = document.getElementById(`${type}-results`);
+            const stats = document.getElementById(`${type}-stats`);
+            const statusMsg = document.getElementById(`${type}-status`);
+
+            btn.disabled = true;
+            const originalBtnText = btn.innerText;
+            btn.innerText = "Fetching...";
+            statusMsg.style.display = "block";
+            statusMsg.innerText = `🔍 Gathering ${type} information via AI...`;
+            statusMsg.style.color = "var(--text-muted)";
+            resultsPanel.style.display = "none";
+            stats.style.display = "none";
+
+            // Choose endpoint based on type
+            const endpoint = type === 'scholarship' ? '/scholar/live' : '/intern/live';
+
+            try {
+                const res = await fetch(`${window.location.origin}${endpoint}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({query})
+                });
+
+                if (!res.ok) {
+                    const errorData = await res.json().catch(() => ({error: "Server Error"}));
+                    throw new Error(errorData.error || `HTTP ${res.status}`);
+                }
+
+                const data = await res.json();
+                
+                let resultText = data.extracted_info || data.result;
+                if (!resultText || resultText.trim() === "") {
+                    resultsPanel.innerHTML = '<em>No results found. Try a different search term.</em>';
+                } else {
+                    resultsPanel.innerHTML = marked.parse(resultText);
+                    
+                    if (data.source) {
+                        document.getElementById(`${type}-source`).innerText = data.source;
+                    }
+                }
+
+                statusMsg.style.display = "none";
+                resultsPanel.style.display = "block";
+                stats.style.display = "block";
+
+            } catch (err) {
+                console.error(`[Live Error] ${type} fetch failed:`, err);
+                statusMsg.style.display = "block";
+                statusMsg.innerText = "✖ Error: " + err.message;
+                statusMsg.style.color = "#f43f5e";
+                resultsPanel.style.display = "none";
+            } finally {
+                btn.disabled = false;
+                btn.innerText = originalBtnText;
+            }
+        }
+
+        document.getElementById('internship-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            handleExtraction('internship');
+        });
+
+        document.getElementById('scholarship-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            handleExtraction('scholarship');
+        });
+
+        const themeToggle = document.getElementById('theme-toggle');
+        if(themeToggle) {
+            themeToggle.addEventListener('click', () => {
+                document.body.classList.toggle('dark-mode');
+                document.body.classList.toggle('light-mode');
+            });
+        }
+    </script>
+</body>
+</html>
